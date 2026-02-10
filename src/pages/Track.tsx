@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Package, MapPin, AlertTriangle, Star, Truck, Box, RefreshCw } from 'lucide-react'
-import { trackOrder, isTrackingError, getStatusLabel } from '@/services/api'
+import { Search, Package, MapPin, AlertTriangle, Star, Truck, Box, RefreshCw, Clock, Camera, X, CheckCircle } from 'lucide-react'
+import { trackOrder, isTrackingError, getStatusLabel, submitReview } from '@/services/api'
 import type { TrackingInfo, TrackingStatus } from '@/services/api'
 import { ShipmentTimeline } from '@/components/shipment-timeline'
 import { cn } from '@/lib/utils'
@@ -11,6 +11,11 @@ export default function Track() {
     const [isLoading, setIsLoading] = useState(false)
     const [trackingInfo, setTrackingInfo] = useState<TrackingInfo | null>(null)
     const [error, setError] = useState<string | null>(null)
+    const [reviewRating, setReviewRating] = useState(0)
+    const [reviewText, setReviewText] = useState('')
+    const [isSubmittingReview, setIsSubmittingReview] = useState(false)
+    const [reviewSubmitted, setReviewSubmitted] = useState(false)
+    const [viewingPhoto, setViewingPhoto] = useState(false)
 
     const handleTrack = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -188,6 +193,17 @@ export default function Track() {
                                 <div className="text-xs opacity-50 font-mono">
                                     Tracking ID: {trackingInfo.trackingId}
                                 </div>
+
+                                {/* ETA Display */}
+                                {(trackingInfo.status === 'assigned' || trackingInfo.status === 'in-transit') && trackingInfo.estimatedDelivery && (
+                                    <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-lg text-sm" style={{ background: 'var(--muted)' }}>
+                                        <Clock className="h-4 w-4 text-blue-500" />
+                                        <span className="opacity-70">Estimated delivery:</span>
+                                        <span className="font-semibold">
+                                            {new Date(trackingInfo.estimatedDelivery).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Locations */}
@@ -315,6 +331,135 @@ export default function Track() {
                                 <div>Ordered: {new Date(trackingInfo.timeline.ordered).toLocaleString()}</div>
                                 <div>Last Updated: {new Date(trackingInfo.timeline.lastUpdate).toLocaleString()}</div>
                             </div>
+
+                            {/* Delivery Photo */}
+                            {trackingInfo.status === 'delivered' && trackingInfo.deliveryPhoto && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.4 }}
+                                    className="p-4 sm:p-6 rounded-lg"
+                                    style={{ background: 'var(--secondary)', border: '1px solid var(--border)' }}
+                                >
+                                    <h3 className="text-xs uppercase tracking-wider opacity-50 font-semibold mb-4">
+                                        Proof of Delivery
+                                    </h3>
+                                    <div
+                                        className="relative cursor-pointer rounded-lg overflow-hidden group"
+                                        onClick={() => setViewingPhoto(true)}
+                                    >
+                                        <img
+                                            src={trackingInfo.deliveryPhoto}
+                                            alt="Delivery proof"
+                                            className="w-full h-48 object-cover rounded-lg group-hover:scale-105 transition-transform duration-300"
+                                        />
+                                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <Camera className="h-8 w-8 text-white" />
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* Customer Rating/Review Form */}
+                            {trackingInfo.status === 'delivered' && !trackingInfo.customerRating && !reviewSubmitted && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.5 }}
+                                    className="p-4 sm:p-6 rounded-lg"
+                                    style={{ background: 'var(--secondary)', border: '1px solid var(--border)' }}
+                                >
+                                    <h3 className="text-xs uppercase tracking-wider opacity-50 font-semibold mb-4">
+                                        Rate Your Delivery
+                                    </h3>
+                                    <div className="flex justify-center gap-2 mb-4">
+                                        {[1, 2, 3, 4, 5].map(star => (
+                                            <button
+                                                key={star}
+                                                onClick={() => setReviewRating(star)}
+                                                className="p-1 transition-transform hover:scale-110"
+                                            >
+                                                <Star
+                                                    className={cn(
+                                                        'h-8 w-8 sm:h-10 sm:w-10 transition-colors',
+                                                        star <= reviewRating
+                                                            ? 'text-amber-500 fill-amber-500'
+                                                            : 'opacity-30'
+                                                    )}
+                                                />
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <textarea
+                                        value={reviewText}
+                                        onChange={e => setReviewText(e.target.value)}
+                                        placeholder="Tell us about your delivery experience (optional)"
+                                        className="w-full h-24 p-3 rounded-lg text-sm resize-none border-0 focus:outline-none focus:ring-2 focus:ring-opacity-50"
+                                        style={{ background: 'var(--muted)', color: 'var(--foreground)' }}
+                                    />
+                                    <button
+                                        onClick={async () => {
+                                            if (reviewRating === 0) return
+                                            setIsSubmittingReview(true)
+                                            const success = await submitReview(trackingInfo.trackingId, reviewRating, reviewText || undefined)
+                                            setIsSubmittingReview(false)
+                                            if (success) {
+                                                setReviewSubmitted(true)
+                                            }
+                                        }}
+                                        disabled={reviewRating === 0 || isSubmittingReview}
+                                        className={cn(
+                                            'w-full mt-4 h-12 font-semibold uppercase tracking-wide text-sm rounded-lg transition-all duration-200',
+                                            'disabled:opacity-50 disabled:cursor-not-allowed'
+                                        )}
+                                        style={{
+                                            background: reviewRating > 0 ? 'var(--foreground)' : 'var(--muted)',
+                                            color: reviewRating > 0 ? 'var(--background)' : 'var(--foreground)'
+                                        }}
+                                    >
+                                        {isSubmittingReview ? (
+                                            <motion.div
+                                                animate={{ rotate: 360 }}
+                                                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                                                className="inline-block"
+                                            >
+                                                <RefreshCw className="h-5 w-5" />
+                                            </motion.div>
+                                        ) : 'Submit Review'}
+                                    </button>
+                                </motion.div>
+                            )}
+
+                            {/* Review Submitted / Existing Rating */}
+                            {(reviewSubmitted || trackingInfo.customerRating) && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="p-4 sm:p-6 rounded-lg text-center"
+                                    style={{ background: 'var(--secondary)', border: '1px solid var(--border)' }}
+                                >
+                                    <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-3" />
+                                    <p className="font-semibold text-lg mb-1">Thank You!</p>
+                                    <div className="flex justify-center gap-1 mb-2">
+                                        {[1, 2, 3, 4, 5].map(star => (
+                                            <Star
+                                                key={star}
+                                                className={cn(
+                                                    'h-5 w-5',
+                                                    star <= (trackingInfo.customerRating || reviewRating)
+                                                        ? 'text-amber-500 fill-amber-500'
+                                                        : 'opacity-20'
+                                                )}
+                                            />
+                                        ))}
+                                    </div>
+                                    {(trackingInfo.customerReview || reviewText) && (
+                                        <p className="text-sm opacity-60 italic">
+                                            "{trackingInfo.customerReview || reviewText}"
+                                        </p>
+                                    )}
+                                </motion.div>
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -349,6 +494,33 @@ export default function Track() {
                     Powered by <span className="font-semibold opacity-100">Orchestr8</span>
                 </div>
             </footer>
+            {/* Photo Lightbox */}
+            <AnimatePresence>
+                {viewingPhoto && trackingInfo?.deliveryPhoto && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100]"
+                        onClick={() => setViewingPhoto(false)}
+                    >
+                        <button
+                            onClick={() => setViewingPhoto(false)}
+                            className="absolute top-4 right-4 text-white hover:text-zinc-300 p-2"
+                        >
+                            <X className="h-6 w-6" />
+                        </button>
+                        <motion.img
+                            initial={{ scale: 0.9 }}
+                            animate={{ scale: 1 }}
+                            src={trackingInfo.deliveryPhoto}
+                            alt="Delivery proof"
+                            className="max-w-[90vw] max-h-[80vh] rounded-lg shadow-2xl object-contain"
+                            onClick={e => e.stopPropagation()}
+                        />
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }

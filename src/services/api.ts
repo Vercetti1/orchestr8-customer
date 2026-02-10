@@ -22,6 +22,10 @@ export type TrackingInfo = {
         ordered: string
         lastUpdate: string
     }
+    estimatedDelivery?: string
+    deliveryPhoto?: string
+    customerRating?: number
+    customerReview?: string
 }
 
 export type TrackingError = {
@@ -74,4 +78,18 @@ export function getStatusStep(status: TrackingStatus): number {
         'cancelled': -1
     }
     return steps[status]
+}
+
+export async function submitReview(orderId: string, rating: number, review?: string): Promise<boolean> {
+    try {
+        const response = await fetch(`${API_URL}/orders/${orderId}/customer-review`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rating, review })
+        })
+        return response.ok
+    } catch (error) {
+        console.error('Review submission error:', error)
+        return false
+    }
 }
