@@ -1,4 +1,4 @@
-import { Client, Databases, Storage, ID, Query } from 'appwrite';
+import { Client, Databases, Storage, Functions, ID, Query } from 'appwrite';
 
 export const PROJECT_ID = import.meta.env.VITE_APPWRITE_PROJECT_ID || '698b8e310019590672cd';
 export const ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://sfo.cloud.appwrite.io/v1';
@@ -16,5 +16,6 @@ const client = new Client()
 
 export const databases = new Databases(client);
 export const storage = new Storage(client);
+export const functions = new Functions(client);
 
 export { ID, client, Query };

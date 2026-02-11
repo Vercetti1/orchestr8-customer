@@ -1,4 +1,4 @@
-import { databases, DATABASE_ID, COLLECTIONS } from './appwrite';
+import { databases, functions, DATABASE_ID, COLLECTIONS } from './appwrite';
 import type { Models } from 'appwrite';
 
 export type TrackingStatus = 'pending' | 'negotiating' | 'assigned' | 'in-transit' | 'delivered' | 'cancelled'
@@ -132,11 +132,14 @@ export function getStatusStep(status: TrackingStatus): number {
 
 export async function submitReview(orderId: string, rating: number, review?: string): Promise<boolean> {
     try {
-        await databases.updateDocument(DATABASE_ID, COLLECTIONS.ORDERS, orderId, {
-            customerRating: rating,
-            customerReview: review
-        });
-        return true;
+        // Use Appwrite Function for unauthenticated review submission
+        const execution = await functions.createExecution(
+            'submit-review',
+            JSON.stringify({ orderId, rating, review })
+        );
+
+        const response = JSON.parse(execution.responseBody);
+        return response.success;
     } catch (error) {
         console.error('Review submission error:', error);
         return false;
