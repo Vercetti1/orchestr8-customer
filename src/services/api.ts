@@ -1,4 +1,5 @@
-const API_URL = 'https://orchestr8-backend-l6bc.onrender.com/api'
+import { databases, DATABASE_ID, COLLECTIONS } from './appwrite';
+import type { Models } from 'appwrite';
 
 export type TrackingStatus = 'pending' | 'negotiating' | 'assigned' | 'in-transit' | 'delivered' | 'cancelled'
 
@@ -33,22 +34,64 @@ export type TrackingError = {
     message: string
 }
 
+const mapDocToTrackingInfo = async (doc: Models.Document): Promise<TrackingInfo> => {
+    let riderInfo = null;
+    const data = doc as any;
+
+    if (data.riderId) {
+        try {
+            const riderId = typeof data.riderId === 'object' ? data.riderId.$id : data.riderId;
+            const riderDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.USERS, riderId);
+            riderInfo = {
+                name: `${riderDoc.firstName} ${riderDoc.lastName}`,
+                profileImage: riderDoc.profileImage,
+                rating: riderDoc.rating || 0,
+                completedTrips: riderDoc.completedTrips || 0
+            };
+        } catch (error) {
+            console.error('Error fetching rider info:', error);
+        }
+    }
+
+    return {
+        trackingId: data.$id,
+        status: data.status as TrackingStatus,
+        pickup: data.pickup,
+        dropoff: data.dropoff,
+        packageDetails: {
+            isFragile: data.isFragile || false,
+            size: data.packageSize || 'medium',
+            instructions: data.specialInstructions || ''
+        },
+        rider: riderInfo,
+        timeline: {
+            ordered: data.$createdAt,
+            lastUpdate: data.$updatedAt
+        },
+        estimatedDelivery: data.estimatedDelivery,
+        deliveryPhoto: data.deliveryPhoto,
+        customerRating: data.customerRating,
+        customerReview: data.customerReview
+    };
+};
+
 export async function trackOrder(orderId: string): Promise<TrackingInfo | TrackingError> {
     try {
-        const response = await fetch(`${API_URL}/track/${orderId}`)
-        const data = await response.json()
-
-        if (!response.ok) {
-            return data as TrackingError
+        // Try to fetch the document by ID directly
+        try {
+            const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.ORDERS, orderId);
+            return await mapDocToTrackingInfo(doc);
+        } catch (e) {
+            // If ID fetch fails, try searching by a potential custom field if trackingId is different
+            // But usually the $id is the tracking ID
+            throw e;
         }
-
-        return data as TrackingInfo
-    } catch (error) {
-        console.error('Tracking error:', error)
+    } catch (error: any) {
+        console.error('Tracking error:', error);
         return {
-            error: 'Connection error',
-            message: 'Unable to connect to tracking service. Please try again.'
-        }
+            error: 'Not found',
+            message: 'Unable to find a shipment with that tracking code. Please double check the ID.'
+        };
     }
 }
 
@@ -82,14 +125,13 @@ export function getStatusStep(status: TrackingStatus): number {
 
 export async function submitReview(orderId: string, rating: number, review?: string): Promise<boolean> {
     try {
-        const response = await fetch(`${API_URL}/orders/${orderId}/customer-review`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rating, review })
-        })
-        return response.ok
+        await databases.updateDocument(DATABASE_ID, COLLECTIONS.ORDERS, orderId, {
+            customerRating: rating,
+            customerReview: review
+        });
+        return true;
     } catch (error) {
-        console.error('Review submission error:', error)
-        return false
+        console.error('Review submission error:', error);
+        return false;
     }
 }
