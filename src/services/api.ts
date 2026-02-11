@@ -42,9 +42,16 @@ const mapDocToTrackingInfo = async (doc: Models.Document): Promise<TrackingInfo>
         try {
             const riderId = typeof data.riderId === 'object' ? data.riderId.$id : data.riderId;
             const riderDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.USERS, riderId);
+            const firstName = riderDoc.firstName || '';
+            const lastName = riderDoc.lastName || '';
+            const profileImageSource = riderDoc.profileImage || null;
+
+            // Apply the same fallback logic as in the main app
+            const profileImage = profileImageSource || `https://ui-avatars.com/api/?name=${encodeURIComponent(firstName + ' ' + lastName)}&background=random`;
+
             riderInfo = {
-                name: `${riderDoc.firstName} ${riderDoc.lastName}`,
-                profileImage: riderDoc.profileImage,
+                name: `${firstName} ${lastName}`.trim(),
+                profileImage,
                 rating: riderDoc.rating || 0,
                 completedTrips: riderDoc.completedTrips || 0
             };
