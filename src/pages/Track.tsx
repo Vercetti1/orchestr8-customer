@@ -1,13 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Package, MapPin, AlertTriangle, Star, Truck, Box, RefreshCw, Clock, Camera, X, CheckCircle } from 'lucide-react'
 import { trackOrder, isTrackingError, getStatusLabel, submitReview } from '@/services/api'
 import type { TrackingInfo, TrackingStatus } from '@/services/api'
 import { ShipmentTimeline } from '@/components/shipment-timeline'
 import { cn } from '@/lib/utils'
+import { useParams, useNavigate } from 'react-router-dom'
 
 export default function Track() {
-    const [trackingCode, setTrackingCode] = useState('')
+    const { id } = useParams()
+    const navigate = useNavigate()
+    const [trackingCode, setTrackingCode] = useState(id || '')
     const [isLoading, setIsLoading] = useState(false)
     const [trackingInfo, setTrackingInfo] = useState<TrackingInfo | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -17,15 +20,29 @@ export default function Track() {
     const [reviewSubmitted, setReviewSubmitted] = useState(false)
     const [viewingPhoto, setViewingPhoto] = useState(false)
 
-    const handleTrack = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!trackingCode.trim()) return
+    // Auto-track on mount if ID is present
+    useEffect(() => {
+        if (id) {
+            setTrackingCode(id)
+            handleTrack(new Event('submit') as any, id)
+        }
+    }, [id])
+
+    const handleTrack = async (e: React.FormEvent, codeOverride?: string) => {
+        e?.preventDefault()
+        const code = codeOverride || trackingCode
+        if (!code.trim()) return
+
+        // Update URL if searching manually (optional, but good for sharing)
+        if (!codeOverride) {
+            navigate(`/track/${code.trim()}`, { replace: true })
+        }
 
         setIsLoading(true)
         setError(null)
         setTrackingInfo(null)
 
-        const result = await trackOrder(trackingCode.trim())
+        const result = await trackOrder(code.trim())
 
         if (isTrackingError(result)) {
             setError(result.message)
