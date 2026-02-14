@@ -18,6 +18,7 @@ export default function Track() {
     const [reviewText, setReviewText] = useState('')
     const [isSubmittingReview, setIsSubmittingReview] = useState(false)
     const [reviewSubmitted, setReviewSubmitted] = useState(false)
+    const [reviewError, setReviewError] = useState<string | null>(null)
     const [viewingPhoto, setViewingPhoto] = useState(false)
 
     // Auto-track on mount if ID is present
@@ -414,14 +415,22 @@ export default function Track() {
                                         className="w-full h-24 p-3 rounded-lg text-sm resize-none border-0 focus:outline-none focus:ring-2 focus:ring-opacity-50"
                                         style={{ background: 'var(--muted)', color: 'var(--foreground)' }}
                                     />
+                                    {reviewError && (
+                                        <p className="mt-2 text-xs text-red-500 text-center">
+                                            {reviewError}
+                                        </p>
+                                    )}
                                     <button
                                         onClick={async () => {
                                             if (reviewRating === 0) return
                                             setIsSubmittingReview(true)
+                                            setReviewError(null)
                                             const success = await submitReview(trackingInfo.trackingId, reviewRating, reviewText || undefined)
                                             setIsSubmittingReview(false)
                                             if (success) {
                                                 setReviewSubmitted(true)
+                                            } else {
+                                                setReviewError('Failed to submit review. Please try again.')
                                             }
                                         }}
                                         disabled={reviewRating === 0 || isSubmittingReview}

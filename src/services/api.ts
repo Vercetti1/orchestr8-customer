@@ -138,6 +138,11 @@ export async function submitReview(orderId: string, rating: number, review?: str
             JSON.stringify({ orderId, rating, review })
         );
 
+        if (!execution.responseBody) {
+            console.error('Empty response from review function');
+            return false;
+        }
+
         const response = JSON.parse(execution.responseBody);
         return response.success;
     } catch (error) {
