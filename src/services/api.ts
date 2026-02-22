@@ -1,5 +1,6 @@
-import { databases, functions, DATABASE_ID, COLLECTIONS } from './appwrite';
-import type { Models } from 'appwrite';
+// export const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// Using hardcoded for now or based on your environment
+export const BASE_URL = 'https://orchestr8-server.onrender.com/api'; // Adjust to your actual server URL
 
 export type TrackingStatus = 'pending' | 'negotiating' | 'assigned' | 'in-transit' | 'delivered' | 'cancelled'
 
@@ -34,70 +35,24 @@ export type TrackingError = {
     message: string
 }
 
-const mapDocToTrackingInfo = async (doc: Models.Document): Promise<TrackingInfo> => {
-    let riderInfo = null;
-    const data = doc as any;
-
-    if (data.riderId) {
-        try {
-            const riderId = typeof data.riderId === 'object' ? data.riderId.$id : data.riderId;
-            const riderDoc = await databases.getDocument(DATABASE_ID, COLLECTIONS.USERS, riderId);
-            const firstName = riderDoc.firstName || '';
-            const lastName = riderDoc.lastName || '';
-            const profileImageSource = riderDoc.profileImage || null;
-
-            // Apply the same fallback logic as in the main app
-            const profileImage = profileImageSource || `https://ui-avatars.com/api/?name=${encodeURIComponent(firstName + ' ' + lastName)}&background=random`;
-
-            riderInfo = {
-                name: `${firstName} ${lastName}`.trim(),
-                profileImage,
-                rating: riderDoc.rating || 0,
-                completedTrips: riderDoc.completedTrips || 0
-            };
-        } catch (error) {
-            console.error('Error fetching rider info:', error);
-        }
-    }
-
-    return {
-        trackingId: data.$id,
-        status: data.status as TrackingStatus,
-        pickup: data.pickup,
-        dropoff: data.dropoff,
-        packageDetails: {
-            isFragile: data.isFragile || false,
-            size: data.packageSize || 'medium',
-            instructions: data.specialInstructions || ''
-        },
-        rider: riderInfo,
-        timeline: {
-            ordered: data.$createdAt,
-            lastUpdate: data.$updatedAt
-        },
-        estimatedDelivery: data.estimatedDelivery,
-        deliveryPhoto: data.deliveryPhoto,
-        customerRating: data.customerRating,
-        customerReview: data.customerReview
-    };
-};
-
 export async function trackOrder(orderId: string): Promise<TrackingInfo | TrackingError> {
     try {
-        // Try to fetch the document by ID directly
-        try {
-            const doc = await databases.getDocument(DATABASE_ID, COLLECTIONS.ORDERS, orderId);
-            return await mapDocToTrackingInfo(doc);
-        } catch (e) {
-            // If ID fetch fails, try searching by a potential custom field if trackingId is different
-            // But usually the $id is the tracking ID
-            throw e;
+        const response = await fetch(`${BASE_URL}/track/${orderId}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            return {
+                error: data.error || 'Not found',
+                message: data.message || 'Unable to find a shipment with that tracking code.'
+            };
         }
-    } catch (error: any) {
+
+        return data as TrackingInfo;
+    } catch (error) {
         console.error('Tracking error:', error);
         return {
-            error: 'Not found',
-            message: 'Unable to find a shipment with that tracking code. Please double check the ID.'
+            error: 'Connection error',
+            message: 'Unable to connect to the tracking server. Please try again later.'
         };
     }
 }
@@ -132,19 +87,21 @@ export function getStatusStep(status: TrackingStatus): number {
 
 export async function submitReview(orderId: string, rating: number, review?: string): Promise<boolean> {
     try {
-        // Use Appwrite Function for unauthenticated review submission
-        const execution = await functions.createExecution(
-            'submit-review',
-            JSON.stringify({ orderId, rating, review })
-        );
+        const response = await fetch(`${BASE_URL}/orders/${orderId}/customer-review`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ rating, review })
+        });
 
-        if (!execution.responseBody) {
-            console.error('Empty response from review function');
+        if (!response.ok) {
+            const data = await response.json();
+            console.error('Review submission error:', data.error);
             return false;
         }
 
-        const response = JSON.parse(execution.responseBody);
-        return response.success;
+        return true;
     } catch (error) {
         console.error('Review submission error:', error);
         return false;
