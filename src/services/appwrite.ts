@@ -1,7 +1,7 @@
 import { Client, Databases, Storage, Functions, ID, Query } from 'appwrite';
 
-export const PROJECT_ID = import.meta.env.VITE_APPWRITE_PROJECT_ID || '698b8e310019590672cd';
-export const ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://sfo.cloud.appwrite.io/v1';
+export const PROJECT_ID = import.meta.env.VITE_APPWRITE_PROJECT_ID || '698ea85b0025d27750bf';
+export const ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1';
 
 export const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || 'orchestr8-db';
 
